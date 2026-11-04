@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Routing.Matching;
 using Npgsql;
+using System.Collections.Generic;
 using System.Data.Common;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -24,9 +25,10 @@ namespace CarsWeb
         [JsonPropertyName("price")]
         public int Price { get; set; }
     }
-    public class CarPgSQLHandler : IDataBaseHandler<Car>, IDisposable
+    public class CarPgSQLHandler : IDataBaseHandler<Car,CarPgSQLHandler>, IDisposable
     {
         private readonly NpgsqlDataSource _dataSource;
+        private static CarPgSQLHandler _inst;
 
         private CarPgSQLHandler(NpgsqlDataSource ds) => _dataSource = ds;
 
@@ -35,7 +37,13 @@ namespace CarsWeb
             _dataSource?.Dispose();
         }
 
-        public static async Task<CarPgSQLHandler> Create(CancellationToken ct = default)
+        public static CarPgSQLHandler GetHandler()
+        {
+            if (_inst == null) _inst = CarPgSQLHandler.Create().Result;
+            return _inst;
+        }
+
+        private static async Task<CarPgSQLHandler> Create(CancellationToken ct = default)
         {
             var ds = NpgsqlDataSource.Create(Config.connect);
             await using var conn = await ds.OpenConnectionAsync(ct);
@@ -53,25 +61,7 @@ namespace CarsWeb
                 "color TEXT NOT NULL, " +
                 "price INTEGER NOT NULL, " +
                 "idDiler INTEGER REFERENCES dilers(id)" +
-                ");" +
-
-                "CREATE OR REPLACE FUNCTION assign_random_diler()" +
-                "RETURNS TRIGGER AS $$" +
-                "BEGIN " +
-                "IF NEW.idDiler IS NULL THEN " +
-                "SELECT id INTO NEW.idDiler " +
-                "FROM dilers " +
-                "ORDER BY random() " +
-                "LIMIT 1;" +
-                "END IF;" +
-                "RETURN NEW;" +
-                "END;" +
-                "$$ LANGUAGE plpgsql;" +
-
-                "CREATE TRIGGER trg_assign_random_diler " +
-                "BEFORE INSERT ON cars " +
-                "FOR EACH ROW " +
-                "EXECUTE FUNCTION assign_random_diler();", conn);
+                ");", conn);
             await createTableCmd.ExecuteNonQueryAsync(ct);
 
             return new CarPgSQLHandler(ds);

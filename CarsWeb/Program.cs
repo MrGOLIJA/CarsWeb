@@ -4,15 +4,17 @@
     {
         static async Task Main(string[] args)
         {
-            using PostgreSQLHandler handler = PostgreSQLHandler.Create().GetAwaiter().GetResult();
-            await handler.FillDilersFromFile("dilers.json");
-            await handler.FillCarsFromFile("cars.json");
+            using CarPgSQLHandler carHandler = CarPgSQLHandler.GetHandler();
+            using DilerPgSQLHandler dilerHandler = DilerPgSQLHandler.GetHandler();
+            await carHandler.FillFromFile("cars.json");
+            await dilerHandler.FillFromFile("dilers.json");
 
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddControllers();
-            builder.Services.AddSingleton<IDataBaseHandler>(handler);
-
+            builder.Services.AddSingleton<IDataBaseHandler<Car,CarPgSQLHandler>>(_ => CarPgSQLHandler.GetHandler());
+            builder.Services.AddSingleton<IDataBaseHandler<Diler,DilerPgSQLHandler>>(_ => DilerPgSQLHandler.GetHandler());
+            
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 

@@ -8,16 +8,15 @@ using System.Threading.Tasks;
 
 namespace CarsWeb
 {
-    public interface IDataBaseHandler<T>
+    public interface IDataBaseHandler<TEntity, THandler>
     {
-        static abstract Task Create(CancellationToken ct = default);
         Task FillFromFile(string fileName);
 
-        Task<List<T>> GetAll(CancellationToken ct = default);
-        Task<T> GetByID(int ID, CancellationToken ct = default);
-        Task<int?> Post(T t, CancellationToken ct = default);
+        Task<List<TEntity>> GetAll(CancellationToken ct = default);
+        Task<TEntity> GetByID(int ID, CancellationToken ct = default);
+        Task<int?> Post(TEntity t, CancellationToken ct = default);
         Task<bool> Delete(int ID, CancellationToken ct = default);
-        Task<bool> Put(int ID,T t, CancellationToken ct = default);
+        Task<bool> Put(int ID,TEntity t, CancellationToken ct = default);
 
     }
 }

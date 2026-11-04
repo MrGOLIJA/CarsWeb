@@ -14,9 +14,10 @@ namespace CarsWeb
         public string Area { get; set; }
         public double Rating { get; set; }
     }
-    public class DilerPgSQLHandler : IDataBaseHandler<Diler>, IDisposable
+    public class DilerPgSQLHandler : IDataBaseHandler<Diler, DilerPgSQLHandler>, IDisposable
     {
         private readonly NpgsqlDataSource _dataSource;
+        private static DilerPgSQLHandler _inst;
 
         private DilerPgSQLHandler(NpgsqlDataSource ds) => _dataSource = ds;
 
@@ -24,7 +25,49 @@ namespace CarsWeb
         {
             _dataSource.Dispose();
         }
+        public static DilerPgSQLHandler GetHandler()
+        {
+            if (_inst == null) _inst = DilerPgSQLHandler.Create().Result;
+            return _inst;
+        }
+        private static async Task<DilerPgSQLHandler> Create(CancellationToken ct = default)
+        {
+            var ds = NpgsqlDataSource.Create(Config.connect);
+            await using var conn = await ds.OpenConnectionAsync(ct);
 
+            await using var clearTable = new NpgsqlCommand("DROP TABLE IF EXISTS dilers CASCADE;", conn);
+            await clearTable.ExecuteNonQueryAsync(ct);
+
+            await using var createTableCmd = new NpgsqlCommand(
+                "CREATE TABLE IF NOT EXISTS dilers(" +
+                "id SERIAL PRIMARY KEY," +
+                "name TEXT NOT NULL," +
+                "city TEXT NOT NULL," +
+                "address TEXT NOT NULL," +
+                "area  TEXT NOT NULL," +
+                "rating REAL NOT NULL);" +
+
+                "CREATE OR REPLACE FUNCTION assign_random_diler()" +
+                "RETURNS TRIGGER AS $$" +
+                "BEGIN " +
+                "IF NEW.idDiler IS NULL THEN " +
+                "SELECT id INTO NEW.idDiler " +
+                "FROM dilers " +
+                "ORDER BY random() " +
+                "LIMIT 1;" +
+                "END IF;" +
+                "RETURN NEW;" +
+                "END;" +
+                "$$ LANGUAGE plpgsql;" +
+
+                "CREATE TRIGGER trg_assign_random_diler " +
+                "BEFORE INSERT ON cars " +
+                "FOR EACH ROW " +
+                "EXECUTE FUNCTION assign_random_diler();", conn);
+            await createTableCmd.ExecuteNonQueryAsync(ct);
+
+            return new DilerPgSQLHandler(ds);
+        }
         public async Task FillFromFile(string fileName)
         {
             await using var conn = await _dataSource.OpenConnectionAsync();
