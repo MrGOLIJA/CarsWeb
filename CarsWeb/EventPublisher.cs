@@ -23,7 +23,7 @@ namespace CarsWeb
         private string queue = "";
         public EventPublisher(string host)
         {
-            connectionFactory = new ConnectionFactory { HostName = host };
+            connectionFactory = new ConnectionFactory { HostName = host, UserName = "cars_user", Password = "pass123" };
         }
 
         public void Dispose()
