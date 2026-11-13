@@ -27,7 +27,7 @@ namespace CarsWeb.Controllers
         public async Task<ActionResult<bool>> DeleteCar(int id, CancellationToken ct)
         {
             var delete = await _dataBaseHandler.Delete(id, ct);
-            return delete is false ? NoContent() : NotFound();
+            return delete is false ? NotFound() : NoContent();
         }
 
         [HttpPost]

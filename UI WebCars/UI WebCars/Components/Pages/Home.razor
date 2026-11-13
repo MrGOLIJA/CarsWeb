@@ -1,7 +1,231 @@
 ﻿@page "/"
+@rendermode InteractiveServer
+@using System.Text.Json
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
-<PageTitle>Home</PageTitle>
+<h1>Машины</h1>
 
-<h1>Hello, world!</h1>
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger">
+        @errorMessage
+        <button class="btn btn-sm btn-secondary ms-2" @onclick="LoadCarsAsync">Повторить</button>
+    </div>
+}
 
-Welcome to your new app.
+<div class="row">
+    <div class="col-md-7">
+        @if (isLoading)
+        {
+            <p><em>Загрузка...</em></p>
+        }
+        else if (cars.Count == 0)
+        {
+            <p>Список пуст.</p>
+        }
+        else
+        {
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Id</th>
+                        <th>Фирма</th>
+                        <th>Модель</th>
+                        <th>Год</th>
+                        <th>Мощность</th>
+                        <th>Цвет</th>
+                        <th>Цена</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var car in cars)
+                    {
+                        <tr class="@(selected?.id == car.id ? "table-primary" : "")">
+                            <td>@car.id</td>
+                            <td>@car.Firm</td>
+                            <td>@car.Model</td>
+                            <td>@car.Year</td>
+                            <td>@car.Power</td>
+                            <td>@car.Color</td>
+                            <td>@car.Price</td>
+                            <td class="text-nowrap">
+                                <button class="btn btn-sm btn-outline-primary me-1"
+                                        @onclick="() => SelectAsync(car.id)">
+                                    Изменить
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => DeleteAsync(car.id)">
+                                    Удалить
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    <div class="col-md-5">
+        @if (selected is not null)
+        {
+            <h3>Редактирование #@selected.id</h3>
+            <div class="mb-2">
+                <label class="form-label">Фирма</label>
+                <input class="form-control" @bind="selected.Firm" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Модель</label>
+                <input class="form-control" @bind="selected.Model" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Год</label>
+                <input class="form-control" type="number" @bind="selected.Year" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Мощность</label>
+                <input class="form-control" type="number" @bind="selected.Power" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Цвет</label>
+                <input class="form-control" @bind="selected.Color" />
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Цена</label>
+                <input class="form-control" type="number" @bind="selected.Price" />
+            </div>
+
+            <button class="btn btn-primary me-2" @onclick="SaveAsync" disabled="@isSaving">
+                @(isSaving ? "Сохранение..." : "Сохранить")
+            </button>
+            <button class="btn btn-secondary" @onclick="() => selected = null">
+                Отмена
+            </button>
+        }
+        else
+        {
+            <p class="text-muted">Выберите машину из списка, чтобы отредактировать.</p>
+        }
+    </div>
+</div>
+
+@code {
+    private IJSObjectReference? module;
+    private List<Cars> cars = new();
+    private Cars? selected;
+    private bool isLoading = true;
+    private bool isSaving;
+    private string? errorMessage;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            module = await JS.InvokeAsync<IJSObjectReference>("import", "./scripts.js");
+            await LoadCarsAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadCarsAsync()
+    {
+        errorMessage = null;
+        isLoading = true;
+
+        try
+        {
+            var json = await module!.InvokeAsync<JsonElement>("loadCars");
+            cars = json.Deserialize<List<Cars>>(JsonOpts) ?? new List<Cars>();
+        }
+        catch (JSException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SelectAsync(int id)
+    {
+        errorMessage = null;
+
+        try
+        {
+            var json = await module!.InvokeAsync<JsonElement>("loadCarsByID", id);
+            selected = json.Deserialize<Cars>(JsonOpts);
+        }
+        catch (JSException ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (selected is null) return;
+
+        errorMessage = null;
+        isSaving = true;
+
+        try
+        {
+            await module!.InvokeVoidAsync("putChangesByCar", selected);
+            await LoadCarsAsync();
+
+            var json = await module.InvokeAsync<JsonElement>("loadCarsByID", selected.id);
+            selected = json.Deserialize<Cars>(JsonOpts);
+        }
+        catch (JSException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        errorMessage = null;
+
+        try
+        {
+            await module!.InvokeVoidAsync("deleteCarByID", id);
+            if (selected?.id == id) selected = null;
+            await LoadCarsAsync();
+        }
+        catch (JSException ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module is not null)
+        {
+            try { await module.DisposeAsync(); }
+            catch (JSDisconnectedException) {}
+        }
+    }
+}

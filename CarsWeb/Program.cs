@@ -13,6 +13,16 @@
 
             var builder = WebApplication.CreateBuilder(args);
 
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowBlazor", policy =>
+                {
+                    policy.AllowAnyOrigin()
+                          .AllowAnyMethod()
+                          .AllowAnyHeader();
+                });
+            });
+
             builder.Services.AddControllers();
             builder.Services.AddSingleton<IDataBaseHandler<Car,CarPgSQLHandler>>(carWrapp);
             builder.Services.AddSingleton<IDataBaseHandler<Diler,DilerPgSQLHandler>>(dilerWrapp);
@@ -20,7 +30,9 @@
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
-            var app = builder.Build();          
+            var app = builder.Build();
+
+            app.UseCors("AllowBlazor");
 
             if (app.Environment.IsDevelopment())
             {
