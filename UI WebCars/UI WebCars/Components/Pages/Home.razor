@@ -14,7 +14,19 @@
         <button class="btn btn-sm btn-secondary ms-2" @onclick="LoadCarsAsync">Повторить</button>
     </div>
 }
-
+<div class="mb-3 d-flex gap-2">
+        <input class="form-control"
+               type="number"
+               placeholder="Поиск по ID"
+               @bind="searchId"
+               @bind:event="oninput"
+               @onkeydown="OnSearchKeyDown" />
+        <button class="btn btn-outline-primary" @onclick="SearchByIdAsync">Найти</button>
+        @if (searchActive)
+        {
+            <button class="btn btn-outline-secondary" @onclick="ClearSearchAsync">Сбросить</button>
+        }
+    </div>
 <div class="row">
     <div class="col-md-7">
         @if (isLoading)
@@ -67,7 +79,7 @@
             </table>
         }
     </div>
-
+    
     <div class="col-md-5">
         @if (selected is not null)
         {
@@ -118,6 +130,8 @@
     private bool isLoading = true;
     private bool isSaving;
     private string? errorMessage;
+    private int? searchId;
+    private bool searchActive;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -213,6 +227,56 @@
         {
             errorMessage = ex.Message;
         }
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchByIdAsync();
+        }
+    }
+
+    private async Task SearchByIdAsync()
+    {
+        if (searchId is null or <= 0)
+        {
+            errorMessage = "Введите корректный ID.";
+            return;
+        }
+
+        errorMessage = null;
+        isLoading = true;
+        searchActive = true;
+
+        try
+        {
+            var json = await module!.InvokeAsync<JsonElement>("loadCarsByID", searchId.Value);
+            var car = json.Deserialize<Cars>(JsonOpts);
+
+            cars = car is null ? new List<Cars>() : new List<Cars> { car };
+
+            if (car is null)
+            {
+                errorMessage = $"Машина с ID {searchId} не найдена.";
+            }
+        }
+        catch (JSException ex)
+        {
+            cars = new List<Cars>();
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ClearSearchAsync()
+    {
+        searchId = null;
+        searchActive = false;
+        await LoadCarsAsync();
     }
 
     private static readonly JsonSerializerOptions JsonOpts = new()
